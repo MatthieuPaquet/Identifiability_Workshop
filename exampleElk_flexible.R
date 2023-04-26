@@ -205,7 +205,7 @@ out <- nimbleMCMC(code = elk.IPMcode,
                   setSeed = mySeed)
 
 # NOTE: Nimble will point out that initialization is incomplete and that there
-# are NA in initial values for some parameters. The former means that not all
+# are NA in some model parameters. The former means that not all
 # nodes have been initialized, while the latter means that some lowest-level
 # parameters (i.e. those that have priors in the model) do not have initial 
 # values. Ideally, we want to at the very least initialize all lowest-level 
