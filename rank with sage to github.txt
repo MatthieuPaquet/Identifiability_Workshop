@@ -1,0 +1,58 @@
+︠cbba97b7-b2e0-43cf-9ccc-07aa433e7ac3︠
+︡64aa30a1-b469-4b50-a462-d3c3abbacd4c︡
+︠c00efb95-c272-42db-a9fa-57467cd04496︠
+
+##### building the derivatives matrix
+phia = var('phia')
+p = var('p')
+kappa2s = vector([phia*p,phia*(1-p)])
+kappa2s
+var2 = vector([phia,p])
+#system=matrix(2,2)
+#system1 = [diff(kappa2s[i], phia) for i in range(2)]
+#system2 = [diff(kappa2s[i], p) for i in range(2)]
+#[system1, system2]
+#rank(system)
+
+system = [diff(kappa2s[i], var2[j]) for i in range(2) for j in range(2)]
+system=matrix(2,2,system)
+system
+system.rank()
+system.eigenvalues()
+system.eigenvectors_right()
+system.eigenvectors_left()
+
+# example of Diana p 50
+# EDP: -df/d theta1 x theta1/theta3 - df/d theta2 x theta2/theta3 + df/dtheta 3 =0
+# corresponding system of ODE
+x = var('x');
+theta1 = function('theta1')(x)
+theta2 = function('theta2')(x)
+theta3 = function('theta3')(x)
+theta = vector([theta1, theta2, theta3])
+theta
+theta[0]
+theta[1]
+theta[2]
+[-theta[0],-theta[1],theta[2]]
+vA = vector([-theta[0],-theta[1],theta[2]])
+vA[0]
+system = [diff(theta[i], x) - vA[i] for i in [0,1,2]]
+system
+# we got the solution but not the dependance
+sol=desolve_system(system, [theta1, theta2, theta3],algorithm='fricas')
+sol
+# second approach with the characteristics
+# d theta1/d theta3 = -theta1/theta3 , d theta2/d theta3= -theta2/theta3
+# theta - > mu
+mu3 = var('mu3');
+mu1 = function('mu1')(mu3)
+mu2 = function('mu2')(mu3)
+mu = vector([mu1,mu2])
+vA = vector([-mu[0]/mu3,-mu[1]/mu3])
+vA
+system = [diff(mu[i], mu3) - vA[i] for i in [0,1]]
+system
+sol=desolve_system(system, [mu1,mu2],algorithm='fricas')
+# it works!!
+sol
