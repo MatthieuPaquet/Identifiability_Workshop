@@ -210,3 +210,74 @@ out <- nimbleMCMC(code = elk.IPMcode,
 # parameters (i.e. those that have priors in the model) do not have initial 
 # values. Ideally, we want to at the very least initialize all lowest-level 
 # parameters. 
+
+# PRIOR-POSTERIOR OVERLAP #
+#-------------------------#
+
+library(MCMCvis)
+
+## List relevant parameters
+plotParams1 <- c(paste0("f[", 1:(Tmax-1), "]"),
+                paste0("s[", 1:Tmax, "]"),
+                paste0("h[", 1:Tmax, "]"),
+                paste0("r[", 1:Tmax, "]"))
+
+plotParams2 <- paste0("N[", 1:Amax, ", 1]")
+
+## Specify priors for relevant parameters
+simNo <- nc*(ni-nb)/nt
+
+# Fecundity, survival, harvest, and reporting priors
+priors1 <- matrix(NA, nrow = simNo, ncol = length(plotParams1))
+
+for(i in 1:length(plotParams1)){
+  priors1[ ,i] <- runif(simNo, 0, 1)
+}
+
+# Initial population sizes
+priors2 <- matrix(NA, nrow = simNo, ncol = length(plotParams2))
+
+for(i in 1:length(plotParams2)){
+  
+  if(inform.prior){
+    priors2[ ,i] <- rpois(simNo, n[i])
+  }else{
+    priors2[ ,i] <- round(runif(simNo, 0.5, UIpriorN.max+0.4999))
+  }
+}
+
+## Plot prior-posterior overlap using MCMCvis package
+
+# Zoom on posterior - vital rate parameters
+MCMCtrace(out, 
+          params = plotParams1,
+          ISB = FALSE,
+          exact = TRUE,
+          priors = priors1,
+          pdf = FALSE)
+
+# Zoom on prior - vital rate parameters
+MCMCtrace(out, 
+          params = plotParams1,
+          ISB = FALSE,
+          exact = TRUE,
+          priors = priors1,
+          pdf = FALSE,
+          post_zm = FALSE)
+
+# Zoom on posterior - initial population sizes
+MCMCtrace(out, 
+          params = plotParams2,
+          ISB = FALSE,
+          exact = TRUE,
+          priors = priors2,
+          pdf = FALSE)
+
+# Zoom on prior - initial population sizes
+MCMCtrace(out, 
+          params = plotParams2,
+          ISB = FALSE,
+          exact = TRUE,
+          priors = priors2,
+          pdf = FALSE,
+          post_zm = FALSE)
