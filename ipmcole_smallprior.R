@@ -172,7 +172,6 @@ IPMcode <- nimbleCode(	{
     Ntot[t] <- NadSurv[t] + Nadimm[t] + N1[t]
     y[t] ~ dpois(Ntot[t])
   }
-  
   if (REPRODATA) {
 #productivity
     f ~ dpois(rho * s)
