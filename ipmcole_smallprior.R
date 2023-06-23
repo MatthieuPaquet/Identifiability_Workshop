@@ -14,7 +14,9 @@
 library(lattice)
 library(coda)
 library(nimble)
-
+#does the IPM include the reproduction dataset?
+REPRODATA <- TRUE
+#REPRODATA <- FALSE
 #------------------------------
 # Function for Prior Overlap
 #-------------------------------
@@ -132,10 +134,16 @@ mfem <- matrix(c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,13,
                  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,4,
                  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,3,
                  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3),nrow=50,ncol=26,byrow=T)
-
 r <- rep(NA,2*(T-1))
 for(i in 1:(2*(T-1))) {
   r[i] <- sum(mfem[i,])
+} 
+if (REPRODATA) {
+  #number of nestlings
+  f <- sum(c(27,19,25,25,47,46,26,29,23,24,20,21,33,32,
+         35,35,8,7,17,10,24,31,28,30,33,25)) # number of offspring produced
+  s <- sum(c(15,9,8,17,18,16,13,9,8,9,9,11,13,11,
+         11,11,10,7,5,5,8,12,14,15,20,24)) # number of breeding females counted
 } 
 # Winbugs model:
 IPMcode <- nimbleCode(	{
@@ -147,7 +155,6 @@ IPMcode <- nimbleCode(	{
   p ~ dunif(0,1)
   
   # Census
-  ##had to change these to avoid slice samplers issues (values are unrealistically high)
   N1[1] <- round(n1)
   n1 ~ T(dnorm(100,0.0001),0,)  
   NadSurv[1] <- round(nadsurv)
@@ -166,7 +173,10 @@ IPMcode <- nimbleCode(	{
     y[t] ~ dpois(Ntot[t])
   }
   
-  
+  if (REPRODATA) {
+#productivity
+    f ~ dpois(rho * s)
+      }
   # CJS 
   q <- 1-p
   for( i in 1:2*(T-1)) {
@@ -205,12 +215,15 @@ nadsurv <- round(y2[1]/2)
 nadim <- 0
 n1 <- round(y2[1]/2)
 constants <- list(T=T,r=r)#note that for nimble r has to be calculated outside the model
-data.or <-list(y=y2,m=mK)
+if (REPRODATA) {
+data <-list(y=y2,m=mK,f=f,s=s)} else {
+data <-list(y=y2,m=mK)
+}
 inits <- list(phij=0.4,phia=0.6,rho=2.5,im=0.1,p=0.4,
               n1=n1,nadsurv=nadsurv,nadim=nadim)
 #Build the model for the IPM
 modelIPM  <-  nimbleModel(IPMcode,
-                          constants = constants,data=data.or,inits = inits)
+                          constants = constants,data=data,inits = inits)
 #compile model for IPM
 cmodelIPM  <-  compileNimble(modelIPM)
 #configure the MCMC
