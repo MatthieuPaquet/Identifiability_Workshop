@@ -6,7 +6,7 @@
 # Section 9.2.2
 #==========================================================
 #==========================================================
-
+setwd("~/Documents/Identifiability_Workshop")
 ###we converted the Winbugs code in NIMBLE cade
 ###and added convergence diagnostics and traceplots
 ### AND used a more reasonable prior for immigration rate: ~Unif(0,1)
@@ -254,7 +254,12 @@ list.samples <- list(runMCMC(cmcmc,niter=20000,nburnin=10000,thin=1,nchains=1,se
 
 
 results <- do.call(rbind.data.frame, list.samples)
-
+if(REPRODATA) {
+  dataset <- "withproductivitydata"
+  } else {  dataset <- "withoutproductivitydata"}
+pdf(file=paste("littleowl_imunif01",dataset,".pdf",sep=""),width=8.6,height=8.6)
+par(mfrow=c(2,2), omi=c(0,0,0.3,0))
+par(mai=c(0.8,0.8,0.4,0.4))
 post<-results$rho
 minv<-0
 maxv<-30
@@ -264,7 +269,7 @@ xlabel<-expression(rho)
 prior <-  dunif(xx,0,30)
 rhooverlap<-overlap(post,prior,minv,maxv,freqv,xlabel)
 rhooverlap
-
+legend('topright',col=c("black","black","white"),legend=c("posterior","prior",paste(round(rhooverlap,digit=2),"% overlap",sep="")),lty=c(1,2,0),lwd=1)
 post<-results$im
 minv<-0
 maxv<-1
@@ -274,16 +279,7 @@ xlabel<-expression(im)
 prior <-  dunif(xx,0,1)
 imoverlap<-overlap(post,prior,minv,maxv,freqv,xlabel)
 imoverlap
-
-post<-results$phia
-minv<-0
-maxv<-1
-freqv<-0.01
-xx <- seq(minv,maxv,freqv)
-xlabel<-expression(phi[a])
-prior <-  dunif(xx,0,1)
-phiaoverlap<-overlap(post,prior,minv,maxv,freqv,xlabel)
-phiaoverlap
+legend('topright',col=c("black","black","white"),legend=c("posterior","prior",paste(round(imoverlap,digit=2),"% overlap",sep="")),lty=c(1,2,0),lwd=1)
 
 post<-results$phij
 minv<-0
@@ -294,7 +290,20 @@ xlabel<-expression(phi[j])
 prior <-  dunif(xx,0,1)
 phijoverlap<-overlap(post,prior,minv,maxv,freqv,xlabel)
 phijoverlap
+legend('topright',col=c("black","black","white"),legend=c("posterior","prior",paste(round(phijoverlap,digit=2),"% overlap",sep="")),lty=c(1,2,0),lwd=1)
 
+post<-results$phia
+minv<-0
+maxv<-1
+freqv<-0.01
+xx <- seq(minv,maxv,freqv)
+xlabel<-expression(phi[a])
+prior <-  dunif(xx,0,1)
+phiaoverlap<-overlap(post,prior,minv,maxv,freqv,xlabel)
+phiaoverlap
+legend('topleft',col=c("black","black","white"),legend=c("posterior","prior",paste(round(phiaoverlap,digit=2),"% overlap",sep="")),lty=c(1,2,0),lwd=1)
+
+dev.off()
 post<-results$p
 minv<-0
 maxv<-1
@@ -304,3 +313,4 @@ xlabel<-expression(p)
 prior <-  dunif(xx,0,1)
 poverlap<-overlap(post,prior,minv,maxv,freqv,xlabel)
 poverlap
+legend('topright',col=c("black","black","white"),legend=c("posterior","prior",paste(round(poverlap,digit=2),"% overlap",sep="")),lty=c(1,2,0),lwd=1)
