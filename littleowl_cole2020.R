@@ -9,7 +9,7 @@
 
 ###we converted the Winbugs code in NIMBLE cade
 ###and added convergence diagnostics and traceplots
-
+### AND added productivity data (REPRODATA <- TRUE/FALSE)
 library(lattice)
 library(coda)
 library(nimble)

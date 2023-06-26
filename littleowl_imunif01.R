@@ -10,7 +10,7 @@
 ###we converted the Winbugs code in NIMBLE cade
 ###and added convergence diagnostics and traceplots
 ### AND used a more reasonable prior for immigration rate: ~Unif(0,1)
-
+### AND added productivity data (REPRODATA <- TRUE/FALSE)
 library(lattice)
 library(coda)
 library(nimble)
