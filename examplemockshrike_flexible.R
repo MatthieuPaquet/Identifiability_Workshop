@@ -4,11 +4,12 @@
 # ------------------------------------------------------
 
 #to be run ith Nimble and implement prior-posterior overlaps
+#and include/exclude the different datasets
 library(IPMbook) 
 library(lattice)
 library(coda)
 library(nimble)
-#Set whichdatasets are included
+#Set which datasets are included
 CRDATA <- TRUE
 #CRDATA <- FALSE
 if (CRDATA) { crname <- "CR_"
