@@ -14,75 +14,99 @@ setwd("~/Documents/Identifiability_Workshop")
 library(lattice)
 library(coda)
 library(nimble)
-#does the IPM include the reproduction dataset?
+library(MCMCvis)
+library(truncnorm)
+#Set which datasets are included
+CRDATA <- TRUE
+#CRDATA <- FALSE
+if (CRDATA) { crname <- "CR_"
+} else { crname <- ""}
 REPRODATA <- TRUE
 #REPRODATA <- FALSE
-#------------------------------
-# Function for Prior Overlap
-#-------------------------------
-
-overlap <- function(data,prior,minv,maxv,freqv,xlabel) {
-  # OVERLAP calculates the proportion overlap between the
-  # prior and posterior using a kernel density to approximate
-  # posterior
-  # Also plots a graph of prior and posterior
-  # 'data' contains the posterior chain
-  # 'prior' contains a vector of prior values evaluated at same interval
-  # as 'minv', 'maxv' and 'freqv' values given
-  
-  k1 <- 0.9 # Controls the smoothness of the kernel
-  
-  x <- seq(minv,maxv,freqv)
-  nn <- length(x)
-  fK <- c(rep(0,nn))
-  
-  overlap<-0
-  for (i in 1:nn) {
-    fK[i]<-kernel(x[i],data,k1)
-    if (fK[i]<prior[i]){
-      overlap<-overlap+fK[i]*freqv
-    }
-    else {
-      overlap=overlap+prior[i]*freqv
-    }
-  }
-  
-  plot(x,fK,type = "l",ylab="f",xlab=xlabel)
-  lines(x,prior,lty=2)  
-  return(overlap)
-}
-
-
-kernel <- function(y,data,k1) {
-  # KERNEL Calculates a kernel density estimate for a sample in 'data'.
-  #   'y' is the value at which we want the kernel estimate.
-  #   'k1' can be chosen to vary the amount of smoothing;
-  #   Calls the function DELTA.
-  
-  n <- length(data)
-  h <- k1*min(sd(data),IQR(data)/1.34)/n^0.2	
-  
-  z <- 0
-  for (i in 1:n ) {
-    z<-z+delta((y-data[i])/h)
-  }				            
-  z<-z/(n*h);
-}
-
-delta <- function(u) {
-  # DELTA calculates a normal kernel
-  
-  y <-(exp(-u*u/2))/sqrt(2*pi);
-}
-
+if (REPRODATA) { reproname <- "P_"
+} else {reproname <- ""}
+COUNTDATA <- TRUE
+#COUNTDATA <- FALSE
+if (COUNTDATA) { countname <- "C_"
+} else {countname <- ""}
+#to name files later
+datascenario <- paste(crname,reproname,countname,sep="")
 #--------------------------------------------
 # NIMBLE Code
 #---------------------------------------------
+IPMcode <- nimbleCode(	{
+  # priors 
+  phij ~ dunif(0,1)
+  phia ~ dunif(0,1)
+  im~dunif(0,1)
+  rho ~ dunif(0,30)
+  p ~ dunif(0,1)
+  # Census
+  N1[1] <- round(n1)
+  #note that these means are unrealistically high.
+  n1 ~ T(dnorm(100,0.0001),0,)  
+  NadSurv[1] <- round(nadsurv)
+  nadsurv~ T(dnorm(100,0.0001),0,)  	 
+  Nadimm[1] <- round(nadim)
+  nadim ~ T(dnorm(100,0.0001),0,) 	
+  Ntot[1] <- NadSurv[1] + Nadimm[1] + N1[1]  
+  
+  for(t in 2:T){ 
+    mean1[t] <- round(0.5*rho*phij*Ntot[t-1])
+    N1[t] ~ dpois(mean1[t])
+    mpo[t] <- round(Ntot[t-1]*im)
+    NadSurv[t] ~ dbin(phia,Ntot[t-1])
+    Nadimm[t] ~ dpois(mpo[t])
+    Ntot[t] <- NadSurv[t] + Nadimm[t] + N1[t]
+  }
+  if (COUNTDATA) {
+    # Observation model
+  for(t in 1:T){ 
+  #In Cole 2020 this loop started from t=2 only but not in Abadi et al.
+  y[t] ~ dpois(Ntot[t])
+  }#t
+  }#COUNTDATA
+  if (REPRODATA) {
+#productivity
+    f ~ dpois(rho * s)
+      }
+  # CJS 
+  if (CRDATA) {
+    # Capture-recapture data (CJS model with multinomial likelihood)
+  for( i in 1:2*(T-1)) {
+    m[i,1:T] ~ dmulti(pr[i,1:T],r[i])
+  }#i
+  }#CRDATA
+  q <- 1-p
+  # m-array cell probabilities for juveniles
+  for(i in 1:(T-1)) {
+    pr[i,i]<-phij*p
+    for(j in (i+1):(T-1)) {
+      pr[i,j] <- phij*phia^(j-i)*q^(j-i)*p
+    } #j
+    for( j in 1:(i-1)) {
+      pr[i,j] <- 0
+    }#j
+    pr[i,T] <- 1-sum(pr[i,1:(T-1)])
+  }#i
+  # m-array cell probabilities for adults
+  for(i in 1:(T-1))            {
+    pr[i+T-1,i] <- phia*p
+    for(j in (i+1):(T-1))            {
+      pr[i+T-1,j] <- phia^(j-i+1)*q^(j-i)*p 
+    } #j
+    for( j in 1:(i-1))                {
+      pr[i+T-1,j] <- 0
+    } #j
+    pr[i+T-1,T] <- 1-sum(pr[i+T-1,1:(T-1)])
+  } #i
+}
 
-
+)
 # Population count data
 y <- c(14,9,8,15,17,15,13,9,8,9,9,10,12,11,10,11,10,7,5,5,8,12,14,15,18,21)
-T <- length(y)
+#number of ocasions
+nyears=length(y)
 # Capture recapture data for females
 mfem <- matrix(c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,13,
                  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9,
@@ -134,183 +158,78 @@ mfem <- matrix(c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,13,
                  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,4,
                  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,3,
                  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3),nrow=50,ncol=26,byrow=T)
-r <- rep(NA,2*(T-1))
-for(i in 1:(2*(T-1))) {
+r <- rep(NA,2*(nyears-1))
+for(i in 1:(2*(nyears-1))) {
   r[i] <- sum(mfem[i,])
 } 
-if (REPRODATA) {
   #number of nestlings
   f <- sum(c(27,19,25,25,47,46,26,29,23,24,20,21,33,32,
-         35,35,8,7,17,10,24,31,28,30,33,25)) # number of offspring produced
+             35,35,8,7,17,10,24,31,28,30,33,25)) # number of offspring produced
   s <- sum(c(15,9,8,17,18,16,13,9,8,9,9,11,13,11,
-         11,11,10,7,5,5,8,12,14,15,20,24)) # number of breeding females counted
-} 
-# Winbugs model:
-IPMcode <- nimbleCode(	{
-  # priors 
-  phij ~ dunif(0,1)
-  phia ~ dunif(0,1)
-  im~dunif(0,1)
-  rho ~ dunif(0,30)
-  p ~ dunif(0,1)
-  
-  # Census
-  N1[1] <- round(n1)
-  n1 ~ T(dnorm(100,0.0001),0,)  
-  NadSurv[1] <- round(nadsurv)
-  nadsurv~ T(dnorm(100,0.0001),0,)  	 
-  Nadimm[1] <- round(nadim)
-  nadim ~ T(dnorm(100,0.0001),0,) 	
-  Ntot[1] <- NadSurv[1] + Nadimm[1] + N1[1]  
-  
-  for(t in 2:T){ 
-    mean1[t] <- round(0.5*rho*phij*Ntot[t-1])
-    N1[t] ~ dpois(mean1[t])
-    mpo[t] <- round(Ntot[t-1]*im)
-    NadSurv[t] ~ dbin(phia,Ntot[t-1])
-    Nadimm[t] ~ dpois(mpo[t])
-    Ntot[t] <- NadSurv[t] + Nadimm[t] + N1[t]
-    y[t] ~ dpois(Ntot[t])
-  }
-  if (REPRODATA) {
-#productivity
-    f ~ dpois(rho * s)
-      }
-  # CJS 
-  q <- 1-p
-  for( i in 1:2*(T-1)) {
-    m[i,1:T] ~ dmulti(pr[i,1:T],r[i])
-  } 	
-  # m-array cell probabilities for juveniles
-  for(i in 1:(T-1)) {
-    pr[i,i]<-phij*p
-    for(j in (i+1):(T-1)) {
-      pr[i,j] <- phij*phia^(j-i)*q^(j-i)*p
-    } 
-    for( j in 1:(i-1)) {
-      pr[i,j] <- 0
-    }
-    pr[i,T] <- 1-sum(pr[i,1:(T-1)])
-  } 
-  # m-array cell probabilities for adults
-  for(i in 1:(T-1))            {
-    pr[i+T-1,i] <- phia*p
-    for(j in (i+1):(T-1))            {
-      pr[i+T-1,j] <- phia^(j-i+1)*q^(j-i)*p 
-    } 
-    for( j in 1:(i-1))                {
-      pr[i+T-1,j] <- 0
-    } 
-    pr[i+T-1,T] <- 1-sum(pr[i+T-1,1:(T-1)])
-  } 
+             11,11,10,7,5,5,8,12,14,15,20,24)) # number of breeding females counted
+  # Bundle data
+  cr.data <- repro.data <- count.data <- list()
+  cr.constants <- repro.constants <- count.constants <- list()
+  base.constants <- list(T=nyears)
+if (CRDATA) {
+  cr.data <- list(m=mfem)
+  cr.constants <- list(r=r)
 }
-
-)
-
-y2 <- y
-mK <- mfem
-
-nadsurv <- round(y2[1]/2)
-nadim <- 0
-n1 <- round(y2[1]/2)
-constants <- list(T=T,r=r)#note that for nimble r has to be calculated outside the model
+if (COUNTDATA) {
+  count.data <- list(y=y)
+}
 if (REPRODATA) {
-data <-list(y=y2,m=mK,f=f,s=s)} else {
-data <-list(y=y2,m=mK)
+  repro.data <- list(f=f)
+  repro.constants <- list(s=s)
 }
-inits <- list(phij=0.4,phia=0.6,rho=2.5,im=0.1,p=0.4,
-              n1=n1,nadsurv=nadsurv,nadim=nadim)
-#Build the model for the IPM
-modelIPM  <-  nimbleModel(IPMcode,
-                          constants = constants,data=data,inits = inits)
-#compile model for IPM
-cmodelIPM  <-  compileNimble(modelIPM)
-#configure the MCMC
-mcmcConf  <-  configureMCMC(cmodelIPM,monitors=c("phij","phia","rho","im","p"))
-#Build the MCMC
-mcmc  <-  buildMCMC(mcmcConf)
-#Compile the  MCMC
-cmcmc  <-  compileNimble(mcmc, project = cmodelIPM)
-#Run the MCMC
-#ADDED traceplots for fecundity and immigration and their posterior correlation
-list.samples <- runMCMC(cmcmc,niter=20000,nburnin=10000,thin=1,nchains=3)
-#here I voluntarily didn't set the seed so that we can see how r hat varies
-#for convergence diagnostic
-gelman.diag(list(as.mcmc(list.samples$chain3),as.mcmc(list.samples$chain2),
-                 as.mcmc(list.samples$chain1)))
-plot(list.samples$chain1[,"im"],type="l",ylim=c(0,1))
-lines(list.samples$chain2[,"im"],col="red")
-lines(list.samples$chain3[,"im"],col="blue")
-plot(list.samples$chain1[,"rho"],type="l",ylim=c(0,30))
-lines(list.samples$chain2[,"rho"],col="red")
-lines(list.samples$chain3[,"rho"],col="blue")
+constants <- c(cr.constants,repro.constants,base.constants)
+data <- c(cr.data,count.data,repro.data)
 
-plot(list.samples$chain1[,"rho"],list.samples$chain1[,"im"],ylim=c(0,1),xlim=c(0,30))
-points(list.samples$chain2[,"rho"],list.samples$chain3[,"im"],col=rgb(red=1,green=0,blue=0,alpha=0.5))
-points(list.samples$chain3[,"rho"],list.samples$chain3[,"im"],col=rgb(red=0,green=0,blue=1,alpha=0.5))
+nadsurv <- round(y[1]/2)
+nadim <- 1
+n1 <- round(y[1]/2)
+inits <-  function(){list(phij=runif(1,0.3,0.5),phia=runif(1,0.5,0.7),rho=2.5,im=0.1,p=0.4,
+              n1=n1,nadsurv=nadsurv,nadim=nadim,NadSurv=rep(nadsurv,nyears),N1=rep(n1,nyears),Nadimm=rep(nadim,nyears))}
+# MCMC settings
+ni <- 20000; nb <- 10000; nc <- 3; nt <- 1;
+## Pre-sample initial values
+#(here they are the same for all chains but I set seed in case we'd change that,
+#and the seed is useful later)
+set.seed(1)
+Inits <- list()
+for(i in 1:nc){
+  Inits[[i]] <- inits()
+}
+parameters <- c("phij","phia","rho","im","p","n1","nadsurv","nadim")
+#Build and run the model for the IPM
+out <- nimbleMCMC(code = IPMcode,
+                  data = data,
+                  constants = constants,
+                  inits = Inits,
+                  monitors = parameters,
+                  samplesAsCodaMCMC = TRUE,
+                  nburnin = nb,
+                  niter = ni,
+                  thin = nt,
+                  nchains = nc,
+                  setSeed = T)
+## Specify priors for relevant parameters
+simNo <- nc*(ni-nb)/nt
+priors <- matrix(NA, nrow = simNo, ncol = length(parameters))
+priors[ ,1:2] <- runif(simNo, 0, 1)
+priors[ ,3] <- runif(simNo, 0, 30)
+priors[ ,4:5] <- runif(simNo, 0, 1)
+priors[ ,6:8] <- rtruncnorm(simNo, mean=100, a=0, b= Inf, sd=sqrt(1/0.0001))
 
-#change niter and burn in for final versions if necessary
-list.samples <- list(runMCMC(cmcmc,niter=20000,nburnin=10000,thin=1,nchains=1,setSeed=T))
-
-
-results <- do.call(rbind.data.frame, list.samples)
-if(REPRODATA) {
-  dataset <- "withproductivitydata"
-  } else {  dataset <- "withoutproductivitydata"}
-pdf(file=paste("littleowl_imunif01",dataset,".pdf",sep=""),width=8.6,height=8.6)
-par(mfrow=c(2,2), omi=c(0,0,0.3,0))
-par(mai=c(0.8,0.8,0.4,0.4))
-post<-results$rho
-minv<-0
-maxv<-30
-freqv<-0.1
-xx <- seq(minv,maxv,freqv)
-xlabel<-expression(rho)
-prior <-  dunif(xx,0,30)
-rhooverlap<-overlap(post,prior,minv,maxv,freqv,xlabel)
-rhooverlap
-legend('topright',col=c("black","black","white"),legend=c("posterior","prior",paste(round(rhooverlap,digit=2),"% overlap",sep="")),lty=c(1,2,0),lwd=1)
-post<-results$im
-minv<-0
-maxv<-1
-freqv<-0.1
-xx <- seq(minv,maxv,freqv)
-xlabel<-expression(im)
-prior <-  dunif(xx,0,1)
-imoverlap<-overlap(post,prior,minv,maxv,freqv,xlabel)
-imoverlap
-legend('topright',col=c("black","black","white"),legend=c("posterior","prior",paste(round(imoverlap,digit=2),"% overlap",sep="")),lty=c(1,2,0),lwd=1)
-
-post<-results$phij
-minv<-0
-maxv<-1
-freqv<-0.01
-xx <- seq(minv,maxv,freqv)
-xlabel<-expression(phi[j])
-prior <-  dunif(xx,0,1)
-phijoverlap<-overlap(post,prior,minv,maxv,freqv,xlabel)
-phijoverlap
-legend('topright',col=c("black","black","white"),legend=c("posterior","prior",paste(round(phijoverlap,digit=2),"% overlap",sep="")),lty=c(1,2,0),lwd=1)
-
-post<-results$phia
-minv<-0
-maxv<-1
-freqv<-0.01
-xx <- seq(minv,maxv,freqv)
-xlabel<-expression(phi[a])
-prior <-  dunif(xx,0,1)
-phiaoverlap<-overlap(post,prior,minv,maxv,freqv,xlabel)
-phiaoverlap
-legend('topleft',col=c("black","black","white"),legend=c("posterior","prior",paste(round(phiaoverlap,digit=2),"% overlap",sep="")),lty=c(1,2,0),lwd=1)
-
-dev.off()
-post<-results$p
-minv<-0
-maxv<-1
-freqv<-0.01
-xx <- seq(minv,maxv,freqv)
-xlabel<-expression(p)
-prior <-  dunif(xx,0,1)
-poverlap<-overlap(post,prior,minv,maxv,freqv,xlabel)
-poverlap
-legend('topright',col=c("black","black","white"),legend=c("posterior","prior",paste(round(poverlap,digit=2),"% overlap",sep="")),lty=c(1,2,0),lwd=1)
+# Zoom on prior - all parameters
+MCMCtrace(out, 
+          params = parameters,
+          ISB = FALSE,
+          exact = TRUE,
+          priors = priors,
+          pdf = TRUE,
+          post_zm = FALSE,
+          iter=simNo/nc,
+          Rhat = TRUE,
+          filename=paste0("plots/littleowl",datascenario,"mcmctrace"))
+save(out,file=paste0("data/output_littleowl",datascenario,"mcmc.Rdata"))
