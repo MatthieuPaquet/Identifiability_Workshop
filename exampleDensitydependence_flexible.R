@@ -12,8 +12,8 @@ library(nimble)
 library(IPMbook)
 
 #Set which datasets are included
-#CRDATA <- TRUE
-CRDATA <- FALSE
+CRDATA <- TRUE
+#CRDATA <- FALSE
 if (CRDATA) { crname <- "CR_"
 } else { crname <- ""}
 REPRODATA <- TRUE
@@ -139,7 +139,7 @@ set.seed(1)
 # Define initial values
 inits <- function() {list(beta=c(0,0,0),alpha=c(qlogis(c(0.05,0.35)),log(3)),pj=runif(1,0.2,0.7), pa=runif(1,0.1,0.6))}
 # MCMC settings
-ni <- 60000; nb <- 30000; nc <- 3; nt <- 4; 
+ni <- 40000; nb <- 10000; nc <- 3; nt <- 4; 
 ## Pre-sample initial values
 Inits <- list()
 for(i in 1:nc){
@@ -174,7 +174,6 @@ plotParams<- c(paste0("alpha[",1:3,"]"),
 ## Specify priors for relevant parameters
 simNo <- nc*(ni-nb)/nt
 
-# Fecundity, survival, harvest, and reporting priors
 priors <- matrix(NA, nrow = simNo, ncol = length(plotParams))
 priors[ ,1:3] <- rnorm(simNo, 0, sd=sqrt(1/0.001))
 priors[ ,4:6] <- runif(simNo, -5, 5)
@@ -196,3 +195,4 @@ MCMCtrace(out,
           iter=simNo/nc,
           Rhat = T,
           filename=paste0("redbackedshrikeDD",datascenario,"mcmctrace"))
+save(out,file=paste0("output_redbackedshrikeDD",datascenario,"mcmc.Rdata"))
