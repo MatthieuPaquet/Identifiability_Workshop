@@ -15,8 +15,8 @@ Tmax <- 6 # Total number of years
 UIpriorN.max <- 1000 # Upper bound of non-informative prior on initial population size
 
 ## Set prior toggle
-inform.prior <- TRUE # Use informative prior for initial population size
-#inform.prior <- FALSE # Use non-informative prior for initial population size
+#inform.prior <- TRUE # Use informative prior for initial population size
+inform.prior <- FALSE # Use non-informative prior for initial population size
 
 ## Set data inclusion toggles
 # Age-at-harvest data
@@ -29,8 +29,8 @@ useData.Hreports <- TRUE
 useData.telemetry <- TRUE
 
 ## Set test-run toggle
-testRun <- TRUE # Tests setup with only 10 iterations / chain
-#testRun <- FALSE # Full run
+#testRun <- TRUE # Tests setup with only 10 iterations / chain
+testRun <- FALSE # Full run
 
 
 # DATA PREPARATION #
@@ -66,7 +66,8 @@ n <- N1 * revec / revec[1]
 nim.data <- with(elk, list(C = C, a = H[1,], b = H[2,], R = R))
 
 nim.constants <- with(elk, list(total = colSums(R), n.years = Tmax,
-                                n.age = Amax, upper = UIpriorN.max))
+                                n.age = Amax, 
+                                N1min = C[,1], upper = UIpriorN.max))
 
 ## Add informative prior information if necessary
 if(inform.prior){
@@ -99,7 +100,8 @@ elk.IPMcode <- nimbleCode({
       N[a, 1] ~ dpois(n[a])
     }else{
       # Non-informative uniform priors
-      n[a] ~ dunif(0.5, upper+0.4999)    # Ensures that 1 and upper are chosen with the same probability as values 2 to 999
+      #n[a] ~ dunif(0.5, upper+0.4999)    # Ensures that 1 and upper are chosen with the same probability as values 2 to 999
+      n[a] ~ dunif(N1min[a], upper)
       N[a, 1] <- round(n[a])
     }
   }
@@ -178,15 +180,61 @@ inits <- function(){
   return(InitList)
 }
 
+
+inits_full <- function(){
+  
+  # Simulate rates
+  s <- runif(nim.constants$n.years, 0.8, 1)
+  h <- runif(nim.constants$n.years, 0.05, 0.15)
+  f <- runif(nim.constants$n.years, 0.25, 0.5)
+  r <- runif(nim.constants$n.years, 0.6, 0.9)
+  
+  # Set initial population sizes
+  n <- round(n)
+  N <- matrix(NA, nrow = nim.constants$n.age, ncol = nim.constants$n.years)
+  
+  N[,1] <- n
+  
+  # Simulate population sizes
+  for (t in 1:(nim.constants$n.years-1)){
+    
+    N[1, t+1] <- rpois(1, sum(N[2:nim.constants$n.age, t]) * f[t])
+    
+    for (a in 2:(nim.constants$n.age)){
+      
+      N[a, t+1] <- rbinom(1, size = N[a-1, t], prob = (1-h[t]) * s[t])
+    }
+  }
+  
+  # Check for discrepancies between simulated N and AaH data
+  if(any(nim.data$C > N)){
+    stop("Simulated population size lower than number reported as harvested.")
+  }
+  
+  # Assemble and return initial values
+  InitList <- list(s = s, h = h, f = f, r = r,
+                   N = N)
+  if(!inform.prior){
+    InitList$n <- n
+  }
+  
+  return(InitList)
+}
+
+
 ## Parameters monitored
 parameters <- c("h", "s", "f", "r", "Ntot", "N")
 
 ## Pre-sample initial values
 Inits <- list()
-for(i in 1:nc){
-  Inits[[i]] <- inits()
-}
 
+for(i in 1:nc){
+  if(inform.prior){
+    Inits[[i]] <- inits()
+  }else{
+    Inits[[i]] <- inits_full()
+  }
+}
 
 # MODEL RUN #
 #-----------#
@@ -204,7 +252,8 @@ out <- nimbleMCMC(code = elk.IPMcode,
                   nchains = nc,
                   setSeed = mySeed)
 
-# NOTE: Nimble will point out that initialization is incomplete and that there
+# NOTE (if using the reduced initial value simulation from the original example, function inits(), only):
+# Nimble will point out that initialization is incomplete and that there
 # are NA in some model parameters. The former means that not all
 # nodes have been initialized, while the latter means that some lowest-level
 # parameters (i.e. those that have priors in the model) do not have initial 
@@ -246,38 +295,49 @@ for(i in 1:length(plotParams2)){
   }
 }
 
+# All parameters
+priorsAll <- cbind(priors1, priors2)
+  
 ## Plot prior-posterior overlap using MCMCvis package
 
-# Zoom on posterior - vital rate parameters
+# All parameters, print to pdf
 MCMCtrace(out, 
-          params = plotParams1,
+          params = c(plotParams1, plotParams2),
           ISB = FALSE,
           exact = TRUE,
-          priors = priors1,
-          pdf = FALSE)
+          priors = priorsAll,
+          pdf = TRUE)
 
-# Zoom on prior - vital rate parameters
-MCMCtrace(out, 
-          params = plotParams1,
-          ISB = FALSE,
-          exact = TRUE,
-          priors = priors1,
-          pdf = FALSE,
-          post_zm = FALSE)
-
-# Zoom on posterior - initial population sizes
-MCMCtrace(out, 
-          params = plotParams2,
-          ISB = FALSE,
-          exact = TRUE,
-          priors = priors2,
-          pdf = FALSE)
-
-# Zoom on prior - initial population sizes
-MCMCtrace(out, 
-          params = plotParams2,
-          ISB = FALSE,
-          exact = TRUE,
-          priors = priors2,
-          pdf = FALSE,
-          post_zm = FALSE)
+# # Zoom on posterior - vital rate parameters
+# MCMCtrace(out, 
+#           params = plotParams1,
+#           ISB = FALSE,
+#           exact = TRUE,
+#           priors = priors1,
+#           pdf = FALSE)
+# 
+# # Zoom on prior - vital rate parameters
+# MCMCtrace(out, 
+#           params = plotParams1,
+#           ISB = FALSE,
+#           exact = TRUE,
+#           priors = priors1,
+#           pdf = FALSE,
+#           post_zm = FALSE)
+# 
+# # Zoom on posterior - initial population sizes
+# MCMCtrace(out, 
+#           params = plotParams2,
+#           ISB = FALSE,
+#           exact = TRUE,
+#           priors = priors2,
+#           pdf = FALSE)
+# 
+# # Zoom on prior - initial population sizes
+# MCMCtrace(out, 
+#           params = plotParams2,
+#           ISB = FALSE,
+#           exact = TRUE,
+#           priors = priors2,
+#           pdf = FALSE,
+#           post_zm = FALSE)
