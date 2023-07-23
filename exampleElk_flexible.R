@@ -23,10 +23,10 @@ inform.prior <- FALSE # Use non-informative prior for initial population size
 useData.AaH <- TRUE
 
 # Harvest reporting data
-useData.Hreports <- TRUE
+useData.Hreports <- FALSE
 
 # Telemetry data
-useData.telemetry <- TRUE
+useData.telemetry <- FALSE
 
 ## Set test-run toggle
 #testRun <- TRUE # Tests setup with only 10 iterations / chain
@@ -291,7 +291,7 @@ for(i in 1:length(plotParams2)){
   if(inform.prior){
     priors2[ ,i] <- rpois(simNo, n[i])
   }else{
-    priors2[ ,i] <- round(runif(simNo, 0.5, UIpriorN.max+0.4999))
+    priors2[ ,i] <- round(runif(simNo, elk$C[i, 1], UIpriorN.max))
   }
 }
 
